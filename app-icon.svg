@@ -1,0 +1,40 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 底板渐变：靛 → 紫（品牌 brand-grad 的加饱和版，小尺寸下对比更好） -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5a63e8"/>
+      <stop offset="1" stop-color="#9a6bff"/>
+    </linearGradient>
+    <!-- 键帽白色：顶部纯白 → 底部微冷 -->
+    <linearGradient id="cap" x1="0" y1="272" x2="0" y2="752" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e9ebff"/>
+    </linearGradient>
+    <!-- 闪电：与底板同向的渐变 -->
+    <linearGradient id="bolt" x1="336" y1="330" x2="688" y2="674" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5a63e8"/>
+      <stop offset="1" stop-color="#9a6bff"/>
+    </linearGradient>
+    <!-- 顶部柔光 -->
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 底板：全出血圆角方 -->
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <rect width="1024" height="1024" rx="224" fill="url(#gloss)"/>
+
+  <!-- 键帽底唇（kbd 签名：底边更厚），下移形成立体键帽 -->
+  <rect x="252" y="286" width="520" height="470" rx="104" fill="#3d43b8" opacity="0.45"/>
+  <!-- 键帽主体 -->
+  <rect x="252" y="266" width="520" height="470" rx="104" fill="url(#cap)"/>
+  <!-- 键帽顶部高光线 -->
+  <rect x="330" y="296" width="364" height="14" rx="7" fill="#ffffff" opacity="0.85"/>
+
+  <!-- 闪电（应用品牌标 Zap 的填充版），居中于键帽 -->
+  <path transform="translate(306,295) scale(17)"
+        d="M13 2 L3 14 L12 14 L11 22 L21 10 L12 10 L13 2 Z"
+        fill="url(#bolt)" stroke="none"/>
+</svg>
