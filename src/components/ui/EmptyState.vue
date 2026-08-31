@@ -3,7 +3,10 @@
 import type { Component } from 'vue';
 import { Sparkles } from 'lucide-vue-next';
 
-withDefaults(defineProps<{ icon?: Component }>(), { icon: () => Sparkles });
+withDefaults(
+  defineProps<{ icon?: Component; /** 空状态标题；也可用 #title 插槽自定义内容 */ title?: string }>(),
+  { icon: () => Sparkles },
+);
 </script>
 
 <template>
@@ -12,7 +15,7 @@ withDefaults(defineProps<{ icon?: Component }>(), { icon: () => Sparkles });
     <div class="empty-icon">
       <component :is="icon" :size="24" :stroke-width="1.8" />
     </div>
-    <div class="empty-title"><slot name="title" /></div>
+    <div class="empty-title"><slot name="title">{{ title }}</slot></div>
     <div class="empty-desc"><slot /></div>
     <div v-if="$slots.action" class="empty-action"><slot name="action" /></div>
   </div>

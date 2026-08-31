@@ -142,8 +142,10 @@ pub fn import_json(data: &mut AppData, text: &str) -> Result<(usize, usize), Str
         }
     }
 
-    let existing: HashSet<String> = data.prompts.iter().map(|p| p.id.clone()).collect();
-    let existing_titles: HashSet<String> = data
+    // 注意用 mut：循环内每收录一条都要回写，否则同一导入文件内
+    // 的重复 id / 重复（分类,标题）条目会绕过去重双双入库
+    let mut existing: HashSet<String> = data.prompts.iter().map(|p| p.id.clone()).collect();
+    let mut existing_titles: HashSet<String> = data
         .prompts
         .iter()
         .map(|p| format!("{}\u{0}{}", p.category, p.title))
@@ -173,7 +175,13 @@ pub fn import_json(data: &mut AppData, text: &str) -> Result<(usize, usize), Str
                     .map(|s| s.to_string());
                 match (title, content) {
                     (Some(t), Some(c)) => Prompt {
-                        id: new_id(),
+                        // 宽松模式也要保留传入的 id：否则同 id 重复导入无法被去重拦截
+                        id: item
+                            .get("id")
+                            .and_then(|x| x.as_str())
+                            .filter(|s| !s.is_empty())
+                            .map(String::from)
+                            .unwrap_or_else(new_id),
                         title: t,
                         content: c,
                         category: String::new(),
@@ -203,6 +211,8 @@ pub fn import_json(data: &mut AppData, text: &str) -> Result<(usize, usize), Str
             prompt.category = "未分类".into();
         }
         data.ensure_category(&prompt.category);
+        existing.insert(prompt.id.clone());
+        existing_titles.insert(key_of(&prompt));
         data.prompts.push(prompt);
         added += 1;
     }
@@ -385,5 +395,387 @@ fn strip_code_fence(raw: &str) -> String {
         }
     }
     trimmed.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{ClipboardItem, ImageRef, Tombstone};
+
+    fn sample_prompt(id: &str, title: &str, category: &str, content: &str) -> Prompt {
+        Prompt {
+            id: id.to_string(),
+            title: title.to_string(),
+            content: content.to_string(),
+            category: category.to_string(),
+            tags: vec!["标签1".into(), "tag2".into()],
+            pinned: false,
+            hotkey: String::new(),
+            use_count: 0,
+            last_used_at: 0,
+            created_at: 1_000,
+            updated_at: 2_000,
+        }
+    }
+
+    fn text_clip(id: &str, content: &str, copied_at: u64) -> ClipboardItem {
+        ClipboardItem {
+            id: id.to_string(),
+            content: content.to_string(),
+            copied_at,
+            kind: "text".into(),
+            image: None,
+        }
+    }
+
+    fn image_clip(id: &str) -> ClipboardItem {
+        ClipboardItem {
+            id: id.to_string(),
+            content: String::new(),
+            copied_at: 1,
+            kind: "image".into(),
+            image: Some(ImageRef {
+                file: format!("{id}.png"),
+                width: 4,
+                height: 4,
+            }),
+        }
+    }
+
+    // ---------- export_json ----------
+
+    #[test]
+    fn export_json_filters_clipboard_secrets_and_images() {
+        let mut data = AppData::default();
+        data.prompts.push(sample_prompt("p1", "标题", "开发", "正文"));
+        data.settings.gist.token = "ghp_token".into();
+        data.settings.webdav.password = "dav_pw".into();
+        data.clipboard.push(text_clip("c1", "普通内容", 1));
+        data.clipboard.push(text_clip("c2", "包含 ghp_token 的内容", 2));
+        data.clipboard.push(text_clip("c3", "密码是 dav_pw", 3));
+        data.clipboard.push(image_clip("c4"));
+        data.tombstones.push(Tombstone { id: "dead".into(), at: 9 });
+
+        let out = export_json(&data, true);
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["app"], "PromptMate");
+        assert_eq!(v["prompts"].as_array().unwrap().len(), 1);
+        assert_eq!(v["tombstones"].as_array().unwrap().len(), 1, "墓碑必须随备份导出");
+
+        let clip_ids: Vec<&str> = v["clipboard"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| i["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(clip_ids, vec!["c1"], "只应留下不含凭据原文的文本条目");
+    }
+
+    #[test]
+    fn export_json_can_exclude_clipboard_entirely() {
+        let mut data = AppData::default();
+        data.clipboard.push(text_clip("c1", "hello", 1));
+        let v: Value = serde_json::from_str(&export_json(&data, false)).unwrap();
+        assert!(v["clipboard"].as_array().unwrap().is_empty());
+    }
+
+    // ---------- fence ----------
+
+    #[test]
+    fn fence_for_uses_min_three_backticks() {
+        assert_eq!(fence_for("普通正文"), "```");
+    }
+
+    #[test]
+    fn fence_for_extends_when_content_has_backtick_runs() {
+        assert_eq!(fence_for("a\n```\nb"), "````");
+        assert_eq!(fence_for("``````"), "```````", "6 连反引号 → 7");
+    }
+
+    #[test]
+    fn strip_code_fence_variants() {
+        assert_eq!(strip_code_fence("```\n正文\n```"), "正文");
+        assert_eq!(strip_code_fence("无围栏"), "无围栏");
+        // 内容自身的三连围栏不被外层误剥
+        assert_eq!(strip_code_fence("````\n```\ninner\n```\n````"), "```\ninner\n```");
+        // 闭围栏短于开围栏：不剥，保持原样
+        assert_eq!(strip_code_fence("````\n正文\n```"), "````\n正文\n```");
+    }
+
+    // ---------- markdown 导出/导入往返 ----------
+
+    #[test]
+    fn markdown_roundtrip_preserves_prompts() {
+        let mut data = AppData::default();
+        data.categories = vec!["开发".into(), "写作".into()];
+        data.prompts.push(sample_prompt(
+            "p1",
+            "代码审查",
+            "开发",
+            "第一行\n```\ncode();\n```\n最后一行",
+        ));
+        data.prompts.push(sample_prompt("p2", "周报", "写作", "简洁正文"));
+        // 孤儿分类：不在 categories 列表里，导出必须归入「未分类」而不是丢失
+        data.prompts.push(sample_prompt("p3", "孤儿", "散落分类", "正文3"));
+
+        let md = export_markdown(&data);
+        assert!(md.contains("# 未分类"), "孤儿分类必须出现在未分类中");
+
+        let mut imported = AppData::default();
+        let (added, skipped) = import_markdown(&mut imported, &md, "导入");
+        assert_eq!((added, skipped), (3, 0));
+
+        for orig in &data.prompts {
+            let expect_cat = if orig.category == "散落分类" {
+                "未分类"
+            } else {
+                &orig.category
+            };
+            let restored = imported
+                .prompts
+                .iter()
+                .find(|p| p.title == orig.title)
+                .unwrap_or_else(|| panic!("标题「{}」应在导入结果中", orig.title));
+            assert_eq!(restored.content, orig.content, "正文往返必须一致（含内部围栏）");
+            assert_eq!(restored.category, expect_cat);
+            assert_eq!(restored.tags, orig.tags);
+        }
+    }
+
+    #[test]
+    fn import_markdown_parses_tags_with_chinese_comma() {
+        let md = "# 分类\n\n## 标题A\n\n标签: 甲，乙 丙\n\n```\n正文\n```\n";
+        let mut data = AppData::default();
+        let (added, skipped) = import_markdown(&mut data, &md, "默认");
+        assert_eq!((added, skipped), (1, 0));
+        let p = &data.prompts[0];
+        assert_eq!(p.title, "标题A");
+        assert_eq!(p.tags, vec!["甲".to_string(), "乙".to_string(), "丙".to_string()]);
+        assert_eq!(p.content, "正文");
+        assert_eq!(p.category, "分类");
+    }
+
+    #[test]
+    fn import_markdown_skips_empty_content_and_duplicates() {
+        let md = "# 分类\n\n## 空条目\n\n## 空条目\n\n正文\n";
+        let mut data = AppData::default();
+        let (added, skipped) = import_markdown(&mut data, &md, "默认");
+        assert_eq!(added, 1, "只有第二条（有正文）应被收录");
+        assert_eq!(skipped, 1, "空正文一条应跳过");
+        assert_eq!(data.prompts[0].title, "空条目");
+    }
+
+    #[test]
+    fn import_markdown_uses_default_category_without_h1() {
+        let md = "## 无分类条目\n\n```\n正文\n```\n";
+        let mut data = AppData::default();
+        let (added, _) = import_markdown(&mut data, &md, "兜底分类");
+        assert_eq!(added, 1);
+        assert_eq!(data.prompts[0].category, "兜底分类");
+    }
+
+    #[test]
+    fn import_markdown_ignores_library_header() {
+        let md = "# PromptMate 提示词库\n\n## 条目\n\n```\n正文\n```\n";
+        let mut data = AppData::default();
+        import_markdown(&mut data, &md, "默认");
+        assert!(
+            !data.categories.contains(&"PromptMate 提示词库".to_string()),
+            "导出文件头不得被当成分类"
+        );
+        assert_eq!(data.prompts[0].category, "默认");
+    }
+
+    // ---------- import_json：四种形态与去重 ----------
+
+    #[test]
+    fn import_json_accepts_four_payload_shapes() {
+        let prompt_json = r#"{"id":"x1","title":"T","content":"C","category":"开发"}"#;
+        let shapes = [
+            format!("[{prompt_json}]"),
+            format!(r#"{{"prompts": [{prompt_json}]}}"#),
+            format!(r#"{{"data": [{prompt_json}]}}"#),
+            format!(r#"{{"app":"PromptMate","version":1,"prompts": [{prompt_json}], "categories": ["开发"]}}"#),
+        ];
+        for shape in shapes {
+            let mut data = AppData::default();
+            let (added, skipped) = import_json(&mut data, &shape).expect("应解析成功");
+            assert_eq!((added, skipped), (1, 0), "形态应收录 1 条: {shape}");
+            assert_eq!(data.prompts[0].title, "T");
+        }
+    }
+
+    #[test]
+    fn import_json_rejects_malformed_and_missing_prompts() {
+        let mut data = AppData::default();
+        let err = import_json(&mut data, "这不是JSON").unwrap_err();
+        assert!(err.contains("JSON 解析失败"), "实际错误: {err}");
+
+        let err = import_json(&mut data, r#"{"foo": 1}"#).unwrap_err();
+        assert!(err.contains("未找到 prompts"), "实际错误: {err}");
+
+        let err = import_json(&mut data, r#"{"prompts": 42}"#).unwrap_err();
+        assert!(err.contains("未找到 prompts"), "prompts 非数组也应报错: {err}");
+    }
+
+    #[test]
+    fn import_json_dedups_by_id_and_by_category_title() {
+        let mut data = AppData::default();
+        data.prompts.push(sample_prompt("x1", "已有", "开发", "旧正文"));
+
+        let input = r#"[
+            {"id":"x1","title":"另一个标题","content":"C"},
+            {"id":"x2","title":"已有","category":"开发","content":"C"},
+            {"id":"x3","title":"全新","content":"C"}
+        ]"#;
+        let (added, skipped) = import_json(&mut data, input).unwrap();
+        assert_eq!((added, skipped), (1, 2), "同 id 与同（分类,标题）都应跳过");
+        assert_eq!(data.prompts.len(), 2);
+    }
+
+    #[test]
+    fn import_json_lenient_mode_needs_title_and_content() {
+        let mut data = AppData::default();
+        let (added, skipped) =
+            import_json(&mut data, r#"[{"title":"只有标题","text":"text 字段正文"}]"#).unwrap();
+        assert_eq!((added, skipped), (1, 0));
+        assert_eq!(data.prompts[0].content, "text 字段正文");
+        assert!(!data.prompts[0].id.is_empty(), "宽松模式必须生成新 id");
+
+        let (added, skipped) = import_json(&mut data, r#"[{"title":"缺正文"}]"#).unwrap();
+        assert_eq!((added, skipped), (0, 1), "缺正文的条目应跳过");
+    }
+
+    #[test]
+    fn import_json_lenient_mode_preserves_id_for_dedup() {
+        // 回归：宽松模式（缺 category 等字段）曾丢弃传入 id，导致同 id 条目重复导入
+        let mut data = AppData::default();
+        data.prompts.push(sample_prompt("dup1", "已有", "开发", "旧正文"));
+        let (added, skipped) = import_json(
+            &mut data,
+            r#"[{"id":"dup1","title":"换了标题的重复条目","content":"C"}]"#,
+        )
+        .unwrap();
+        assert_eq!((added, skipped), (0, 1), "同 id 条目即使缺分类也必须跳过");
+        assert_eq!(data.prompts.len(), 1);
+        assert_eq!(data.prompts[0].title, "已有", "原有条目不得被改动");
+    }
+
+    #[test]
+    fn import_json_dedups_within_single_file_by_id() {
+        // 回归（P2-1）：去重集合是循环前快照，同文件内同 id 的两条
+        // 会双双入库产生重复 id，按 id 查找的保存/删除只会命中第一条
+        let mut data = AppData::default();
+        let (added, skipped) = import_json(
+            &mut data,
+            r#"[
+                {"id":"dup","title":"第一条","content":"C1"},
+                {"id":"dup","title":"第二条","content":"C2"}
+            ]"#,
+        )
+        .unwrap();
+        assert_eq!((added, skipped), (1, 1), "同文件内同 id 只收第一条");
+        assert_eq!(data.prompts.len(), 1);
+        assert_eq!(data.prompts[0].title, "第一条");
+    }
+
+    #[test]
+    fn import_json_dedups_same_category_title_within_file() {
+        let mut data = AppData::default();
+        let (added, skipped) = import_json(
+            &mut data,
+            r#"[
+                {"id":"a","title":"同名","category":"开发","content":"C1"},
+                {"id":"b","title":"同名","category":"开发","content":"C2"},
+                {"id":"c","title":"同名","category":"写作","content":"C3"}
+            ]"#,
+        )
+        .unwrap();
+        assert_eq!(
+            (added, skipped),
+            (2, 1),
+            "同文件内同（分类,标题）去重，不同分类不受影响"
+        );
+        assert_eq!(data.prompts.len(), 2);
+    }
+
+    #[test]
+    fn import_json_fills_empty_title_and_category() {
+        let mut data = AppData::default();
+        import_json(&mut data, r#"[{"id":"e1","title":"","content":"C"}]"#).unwrap();
+        assert_eq!(data.prompts[0].title, "导入提示词 1");
+        assert_eq!(data.prompts[0].category, "未分类");
+        assert!(data.categories.contains(&"未分类".to_string()));
+    }
+
+    #[test]
+    fn import_json_merges_tombstones_taking_max() {
+        let mut data = AppData::default();
+        data.tombstones.push(Tombstone { id: "t1".into(), at: 500 });
+
+        let input = r#"{
+            "prompts": [],
+            "tombstones": [
+                {"id": "t1", "at": 300},
+                {"id": "t2", "at": 700},
+                {"id": "", "at": 900},
+                {"id": "t3"}
+            ]
+        }"#;
+        import_json(&mut data, input).unwrap();
+        assert_eq!(data.tombstones.len(), 2, "空 id / 缺 at 的墓碑应被忽略");
+        let t1 = data.tombstones.iter().find(|t| t.id == "t1").unwrap();
+        assert_eq!(t1.at, 500, "已有墓碑取较新时间");
+        assert!(data.tombstones.iter().any(|t| t.id == "t2" && t.at == 700));
+    }
+
+    #[test]
+    fn import_json_caps_tombstones_at_5000() {
+        let mut data = AppData::default();
+        let ts: Vec<Value> = (0..5010)
+            .map(|i| serde_json::json!({"id": format!("t{i}"), "at": i}))
+            .collect();
+        let input = serde_json::json!({ "prompts": [], "tombstones": ts }).to_string();
+        import_json(&mut data, &input).unwrap();
+        assert_eq!(data.tombstones.len(), 5000);
+    }
+
+    #[test]
+    fn import_json_on_real_repo_sample_file() {
+        // 用仓库里随版本维护的真实导入样例做集成验证
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../dev-workflow-prompts.import.json");
+        let raw = std::fs::read_to_string(path).expect("样例文件应存在");
+        let expected: Value = serde_json::from_str(&raw).unwrap();
+        let expected_count = expected["prompts"].as_array().unwrap().len();
+
+        let mut data = AppData::default();
+        let (added, skipped) = import_json(&mut data, &raw).expect("样例文件必须可导入");
+        assert_eq!(added, expected_count, "样例中的每条提示词都应被收录");
+        assert_eq!(skipped, 0);
+        for p in &data.prompts {
+            assert!(!p.title.is_empty());
+            assert!(!p.content.is_empty());
+            assert!(data.categories.iter().any(|c| c == &p.category));
+        }
+    }
+
+    // ---------- import_text ----------
+
+    #[test]
+    fn import_text_rejects_blank_content() {
+        let mut data = AppData::default();
+        assert!(!import_text(&mut data, "标题", "   \n\t "));
+        assert!(data.prompts.is_empty());
+    }
+
+    #[test]
+    fn import_text_adds_prompt_under_uncategorized() {
+        let mut data = AppData::default();
+        assert!(import_text(&mut data, "便签", "便签正文"));
+        assert_eq!(data.prompts.len(), 1);
+        assert_eq!(data.prompts[0].title, "便签");
+        assert_eq!(data.prompts[0].content, "便签正文");
+        assert_eq!(data.prompts[0].category, "未分类");
+    }
 }
 
