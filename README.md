@@ -1,6 +1,6 @@
 # PromptMate 提示词助手
 
-一个本地优先的 Windows 桌面提示词管理工具（Tauri 2 + Vue 3）。
+一个本地优先的跨平台桌面提示词管理工具（Tauri 2 + Vue 3），支持 Windows 与 macOS。
 
 ## 功能
 
@@ -27,11 +27,25 @@ pnpm tauri dev     # 开发模式
 pnpm tauri build   # 产出安装包（src-tauri/target/release/bundle/nsis/）
 ```
 
-依赖：Node 18+、Rust (MSVC)、VS Build Tools。
+依赖：Node 18+、Rust。
+
+- Windows：需 MSVC 工具链与 VS Build Tools，安装包产出在 `src-tauri/target/release/bundle/nsis/`
+- macOS：需 Xcode Command Line Tools，安装包产出在 `src-tauri/target/release/bundle/dmg/`
+
+### macOS 首次使用
+
+1. 全局快捷键呼出与自动粘贴依赖系统「辅助功能」权限：未授权时应用设置页会显示引导，一键打开
+   **系统设置 → 隐私与安全性 → 辅助功能**，勾选 PromptMate 后重启应用即可
+2. 未做代码签名，若 Gatekeeper 拦截，右键 App →「打开」即可
+
+### CI 构建（自动发版）
+
+推送 `v*` 标签后，CI 会自动构建两份安装包并附加到对应 Release：
+Windows NSIS 安装包、macOS Apple Silicon (M 系列芯片) 的 `.dmg`。
 
 ## 数据与隐私
 
-- 全部数据保存在本机 `%APPDATA%/com.promptmate.app/data.json`（每次保存自动保留上一份备份 `data.json.bak`；若数据文件损坏，应用会将其隔离为 `data.json.corrupt-*` 并以空数据启动，可从 `.bak` 手动恢复）
+- 全部数据保存在本机应用数据目录的 `data.json`（Windows `%APPDATA%\com.promptmate.app\`，macOS `~/Library/Application Support/com.promptmate.app/`；每次保存自动保留上一份备份 `data.json.bak`；若数据文件损坏，应用会将其隔离为 `data.json.corrupt-*` 并以空数据启动，可从 `.bak` 手动恢复）
 - 云同步为可选功能，凭据只存在本机，不上传任何第三方服务器（仅与你配置的 WebDAV 网盘或 GitHub API 通信）
 - 文本剪贴板历史默认**不**参与云同步；如需同步，在「云同步」页开启「云同步包含剪贴板历史」（多设备间请保持该开关一致）。图片条目始终只存本机
 
@@ -59,4 +73,4 @@ pnpm tauri build   # 产出安装包（src-tauri/target/release/bundle/nsis/）
 | `Ctrl+K` | 聚焦搜索框（管理窗口；在无搜索框的页签会自动跳回提示词页） |
 | `Ctrl+S` | 管理窗口中保存提示词 |
 
-> 图片条目仅保存在本机（`%APPDATA%/com.promptmate.app/images/`），不参与云同步与 JSON 导出。
+> 图片条目仅保存在本机（应用数据目录的 `images/`，macOS 路径同上），不参与云同步与 JSON 导出。
