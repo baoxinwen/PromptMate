@@ -202,6 +202,32 @@ pub fn get_clipboard_text() -> Option<String> {
     paste::get_clipboard_text()
 }
 
+/// macOS 全局快捷键与模拟按键需要「辅助功能」权限；其他平台恒为 true
+#[tauri::command]
+pub fn check_accessibility() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        // AXIsProcessTrusted 返回 C Boolean(unsigned char)，用 u8 承接再判非零
+        #[link(name = "ApplicationServices", kind = "framework")]
+        extern "C" {
+            fn AXIsProcessTrusted() -> u8;
+        }
+        unsafe { AXIsProcessTrusted() != 0 }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
+}
+
+/// 打开系统「辅助功能」权限设置页（仅 macOS 有意义）
+#[tauri::command]
+pub fn open_accessibility_settings(app: AppHandle) -> Result<(), String> {
+    app.opener()
+        .open_url("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility", None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn get_var_memory(
     app: tauri::AppHandle<Wry>,

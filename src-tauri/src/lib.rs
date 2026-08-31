@@ -132,6 +132,8 @@ pub fn run() {
             commands::close_capture,
             commands::set_panel_height,
             commands::get_clipboard_text,
+            commands::check_accessibility,
+            commands::open_accessibility_settings,
             commands::get_var_memory,
             commands::save_var_memory,
             commands::save_settings,
