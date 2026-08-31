@@ -696,3 +696,184 @@ pub fn spawn_auto_sync(app: AppHandle) {
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{AppData, ClipboardItem, Prompt, Settings, Tombstone, MAX_CLIPBOARD_ITEMS};
+
+    fn prompt(id: &str, content: &str, updated_at: u64, use_count: u64, last_used_at: u64) -> Prompt {
+        Prompt {
+            id: id.to_string(),
+            title: format!("标题-{id}"),
+            content: content.to_string(),
+            category: "开发".to_string(),
+            tags: vec![],
+            pinned: false,
+            hotkey: String::new(),
+            use_count,
+            last_used_at,
+            created_at: 1,
+            updated_at,
+        }
+    }
+
+    fn text_clip(id: &str, content: &str, copied_at: u64) -> ClipboardItem {
+        ClipboardItem {
+            id: id.to_string(),
+            content: content.to_string(),
+            copied_at,
+            kind: "text".into(),
+            image: None,
+        }
+    }
+
+    fn payload(
+        categories: Vec<&str>,
+        prompts: Vec<Prompt>,
+        clipboard: Vec<ClipboardItem>,
+        tombstones: Vec<Tombstone>,
+    ) -> SyncPayload {
+        SyncPayload {
+            version: 1,
+            exported_at: 0,
+            categories: categories.into_iter().map(String::from).collect(),
+            prompts,
+            clipboard,
+            tombstones,
+        }
+    }
+
+    #[test]
+    fn merge_adds_remote_only_prompts_and_categories() {
+        let mut local = AppData::default();
+        let remote = payload(
+            vec!["开发", "新分类"],
+            vec![prompt("r1", "远端正文", 100, 0, 0)],
+            vec![],
+            vec![],
+        );
+        let (added, updated, removed) = merge(&mut local, &remote);
+        assert_eq!((added, updated, removed), (1, 0, 0));
+        assert_eq!(local.prompts[0].content, "远端正文");
+        assert!(local.categories.contains(&"新分类".to_string()));
+    }
+
+    #[test]
+    fn merge_keeps_local_only_prompts() {
+        let mut local = AppData::default();
+        local.prompts.push(prompt("l1", "本地独有", 100, 0, 0));
+        let remote = payload(vec![], vec![], vec![], vec![]);
+        let report = merge(&mut local, &remote);
+        assert_eq!(report, (0, 0, 0));
+        assert_eq!(local.prompts.len(), 1);
+        assert_eq!(local.prompts[0].content, "本地独有");
+    }
+
+    #[test]
+    fn merge_remote_newer_takes_content_but_keeps_max_usage() {
+        let mut local = AppData::default();
+        // 本机：旧内容，但使用统计更高
+        local.prompts.push(prompt("p1", "旧内容", 100, 5, 900));
+        // 远端：更新的编辑，但使用统计低
+        let remote = payload(vec![], vec![prompt("p1", "新内容", 200, 2, 100)], vec![], vec![]);
+
+        let (added, updated, removed) = merge(&mut local, &remote);
+        assert_eq!((added, updated, removed), (0, 1, 0));
+        assert_eq!(local.prompts[0].content, "新内容", "远端更新时间新，内容应取胜");
+        assert_eq!(local.prompts[0].use_count, 5, "使用计数必须单调收敛取 max");
+        assert_eq!(local.prompts[0].last_used_at, 900, "最后使用时间必须单调收敛取 max");
+    }
+
+    #[test]
+    fn merge_local_newer_keeps_content_but_absorbs_remote_usage() {
+        let mut local = AppData::default();
+        local.prompts.push(prompt("p1", "本地新内容", 200, 1, 0));
+        let remote = payload(vec![], vec![prompt("p1", "远端旧内容", 100, 7, 555)], vec![], vec![]);
+
+        let (added, updated, _) = merge(&mut local, &remote);
+        assert_eq!((added, updated), (0, 0), "本机较新不算更新");
+        assert_eq!(local.prompts[0].content, "本地新内容");
+        assert_eq!(local.prompts[0].use_count, 7, "远端更高的使用计数要被吸收");
+        assert_eq!(local.prompts[0].last_used_at, 555);
+    }
+
+    #[test]
+    fn merge_propagates_tombstone_deletions() {
+        let mut local = AppData::default();
+        local.prompts.push(prompt("p1", "将被删除", 100, 0, 0));
+        local.prompts.push(prompt("p2", "不受影响", 300, 0, 0));
+        local.clipboard.push(text_clip("c1", "旧剪贴", 100));
+        let remote = payload(
+            vec![],
+            vec![],
+            vec![],
+            vec![Tombstone { id: "p1".into(), at: 200 }, Tombstone { id: "c1".into(), at: 150 }],
+        );
+        let (_, _, removed) = merge(&mut local, &remote);
+        assert_eq!(removed, 2);
+        assert!(local.prompts.iter().all(|p| p.id != "p1"));
+        assert!(local.clipboard.iter().all(|i| i.id != "c1"));
+        assert!(local.prompts.iter().any(|p| p.id == "p2"));
+    }
+
+    #[test]
+    fn merge_tombstone_older_than_edit_keeps_entry() {
+        let mut local = AppData::default();
+        // 删除之后又在另一端编辑过（updated_at 晚于墓碑）：复活保留
+        local.prompts.push(prompt("p1", "删除后又编辑", 300, 0, 0));
+        let remote = payload(vec![], vec![], vec![], vec![Tombstone { id: "p1".into(), at: 200 }]);
+        let (_, _, removed) = merge(&mut local, &remote);
+        assert_eq!(removed, 0);
+        assert_eq!(local.prompts.len(), 1);
+    }
+
+    #[test]
+    fn merge_clipboard_last_writer_wins_by_copied_at() {
+        let mut local = AppData::default();
+        local.clipboard.push(text_clip("c1", "本地旧", 100));
+        let remote = payload(vec![], vec![], vec![text_clip("c1", "远端新", 200)], vec![]);
+        merge(&mut local, &remote);
+        assert_eq!(local.clipboard[0].content, "远端新");
+
+        let mut local2 = AppData::default();
+        local2.clipboard.push(text_clip("c1", "本地新", 200));
+        let remote2 = payload(vec![], vec![], vec![text_clip("c1", "远端旧", 100)], vec![]);
+        merge(&mut local2, &remote2);
+        assert_eq!(local2.clipboard[0].content, "本地新");
+    }
+
+    #[test]
+    fn merge_caps_clipboard_union_at_limit_keeping_newest() {
+        let mut local = AppData::default();
+        for i in 0..600u64 {
+            local.clipboard.push(text_clip(&format!("l{i}"), "x", i));
+        }
+        let remote_clips: Vec<ClipboardItem> = (0..600u64)
+            .map(|i| text_clip(&format!("r{i}"), "y", 600 + i))
+            .collect();
+        let remote = payload(vec![], vec![], remote_clips, vec![]);
+
+        let (added, _, removed) = merge(&mut local, &remote);
+        assert_eq!(added, 600, "远端 600 条全部计入新增");
+        assert_eq!(removed, 0, "超限截断不计入墓碑删除");
+        assert_eq!(local.clipboard.len(), MAX_CLIPBOARD_ITEMS);
+        let oldest = local.clipboard.iter().map(|i| i.copied_at).min().unwrap();
+        assert_eq!(oldest, 200, "应保留最新的 1000 条（copied_at 200..1200）");
+        assert!(!local.clipboard.iter().any(|i| i.id == "l0"));
+        assert!(local.clipboard.iter().any(|i| i.id == "r599"));
+    }
+
+    #[test]
+    fn merge_empty_payload_is_noop() {
+        let mut local = AppData::default();
+        local.prompts.push(prompt("p1", "保持", 1, 0, 0));
+        let before_len = local.prompts.len();
+        let report = merge(&mut local, &payload(vec![], vec![], vec![], vec![]));
+        assert_eq!(report, (0, 0, 0));
+        assert_eq!(local.prompts.len(), before_len);
+        // settings 不在同步载荷内，绝不能被 merge 触碰
+        let s: Settings = Settings::default();
+        assert_eq!(local.settings.sync_provider, s.sync_provider);
+    }
+}

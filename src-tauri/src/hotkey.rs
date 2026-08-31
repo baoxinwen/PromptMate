@@ -249,3 +249,101 @@ fn normalize(s: &str) -> String {
         .collect();
     parts.join("+")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::AppData;
+
+    fn prompt_with_hotkey(id: &str, hotkey: &str, updated_at: u64) -> crate::models::Prompt {
+        crate::models::Prompt {
+            id: id.to_string(),
+            title: format!("提示词-{id}"),
+            content: "正文".into(),
+            category: "开发".into(),
+            tags: vec![],
+            pinned: false,
+            hotkey: hotkey.to_string(),
+            use_count: 0,
+            last_used_at: 0,
+            created_at: 1,
+            updated_at,
+        }
+    }
+
+    // ---------- normalize ----------
+
+    #[test]
+    fn normalize_unifies_case_and_whitespace() {
+        assert_eq!(normalize("Alt+P"), "alt+p");
+        assert_eq!(normalize("  Ctrl + Shift + A "), "ctrl+shift+a");
+        assert_eq!(normalize("ALT+Q"), "alt+q");
+    }
+
+    #[test]
+    fn normalize_drops_empty_segments() {
+        assert_eq!(normalize("alt++p"), "alt+p");
+        assert_eq!(normalize("++"), "");
+        assert_eq!(normalize(""), "");
+    }
+
+    // ---------- sanitize_prompt_hotkeys ----------
+
+    #[test]
+    fn sanitize_clears_prompt_hotkey_conflicting_with_main_key() {
+        let mut data = AppData::default(); // 默认主键 alt+q
+        data.prompts.push(prompt_with_hotkey("p1", "Alt+Q", 5));
+        data.prompts.push(prompt_with_hotkey("p2", "ctrl+k", 5));
+
+        sanitize_prompt_hotkeys(&mut data);
+        let p1 = data.prompts.iter().find(|p| p.id == "p1").unwrap();
+        let p2 = data.prompts.iter().find(|p| p.id == "p2").unwrap();
+        assert!(p1.hotkey.is_empty(), "与主键冲突（归一化后比较）必须清空");
+        assert!(p1.updated_at > 5, "清理结果必须 bump updated_at 才能同步出去");
+        assert_eq!(p2.hotkey, "ctrl+k", "无冲突的快捷键必须保留");
+    }
+
+    #[test]
+    fn sanitize_clears_prompt_hotkey_conflicting_with_capture_key() {
+        let mut data = AppData::default(); // 默认捕获键 alt+s
+        data.prompts.push(prompt_with_hotkey("p1", "  ALT + S ", 5));
+        sanitize_prompt_hotkeys(&mut data);
+        assert!(data.prompts[0].hotkey.is_empty());
+    }
+
+    #[test]
+    fn sanitize_duplicate_prompt_hotkeys_first_wins() {
+        let mut data = AppData::default();
+        data.prompts.push(prompt_with_hotkey("p1", "ctrl+j", 5));
+        data.prompts.push(prompt_with_hotkey("p2", "Ctrl+J", 5));
+        data.prompts.push(prompt_with_hotkey("p3", " ctrl+j ", 5));
+
+        sanitize_prompt_hotkeys(&mut data);
+        assert_eq!(data.prompts[0].hotkey, "ctrl+j", "先注册者保留");
+        assert!(data.prompts[1].hotkey.is_empty(), "后到的重复键清空");
+        assert!(data.prompts[2].hotkey.is_empty(), "仅空白差异的等价形式同样算重复");
+    }
+
+    #[test]
+    fn sanitize_leaves_empty_hotkeys_untouched() {
+        let mut data = AppData::default();
+        data.prompts.push(prompt_with_hotkey("p1", "   ", 7));
+        sanitize_prompt_hotkeys(&mut data);
+        assert_eq!(data.prompts[0].updated_at, 7, "空快捷键不应触发 updated_at 变化");
+    }
+
+    // ---------- has_vars：与前端 vars.ts 的行为一致性 ----------
+
+    #[test]
+    fn rust_has_vars_matches_frontend_semantics() {
+        assert!(!has_vars("纯文本"));
+        assert!(!has_vars(""), "空内容无变量");
+        assert!(!has_vars("{{}}"), "空变量名不算");
+        assert!(!has_vars("{{clipboard}}"), "自动变量不算手动变量");
+        assert!(!has_vars("{{ ClipBoard }}"), "自动变量忽略大小写与空白");
+        assert!(!has_vars("{{未闭合"), "缺少闭合不算");
+        assert!(has_vars("{{名字}}"));
+        assert!(has_vars("前缀 {{ name | 提示语 }} 后缀"));
+        assert!(has_vars("{{a|hint}}"));
+    }
+}

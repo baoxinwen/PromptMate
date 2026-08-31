@@ -3248,6 +3248,7 @@ dependencies = [
  "tauri-plugin-global-shortcut",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "tempfile",
  "ureq",
  "uuid",
  "windows-sys 0.61.2",

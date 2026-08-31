@@ -28,3 +28,9 @@ design-system/
 *.tmp
 *.bak
 *.orig
+
+# test artifacts
+test-results/
+playwright-report/
+e2e-artifacts/
+tools/

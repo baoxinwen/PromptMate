@@ -15,19 +15,29 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use store::SharedStore;
 
-/// 创建三个窗口：快捷面板 / 管理窗口 / 快速捕获小窗
-fn create_windows(app: &tauri::App) -> tauri::Result<()> {
+/// 创建三个窗口：快捷面板 / 管理窗口 / 快速捕获小窗。
+/// E2E 模式下主窗口直接可见（便于 WebDriver 定位与截图），并显式开启
+/// WebView2 远程调试端口：wry 传入的 additional_browser_args 会覆盖
+/// WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS 环境变量，调试端口必须由这里给出
+fn create_windows(app: &tauri::App, e2e: bool) -> tauri::Result<()> {
     // 快捷面板（无框、置顶、不进任务栏，Spotlight 式）
-    WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
+    let mut main = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
         .title("PromptMate")
         .inner_size(760.0, 520.0)
         .resizable(false)
         .decorations(false)
         .always_on_top(true)
         .skip_taskbar(true)
-        .visible(false)
-        .center()
-        .build()?;
+        .visible(e2e)
+        .center();
+    if e2e {
+        // 固定调试端口供 msedgedriver 以 debuggerAddress 附加；
+        // --disable-features 是 wry 的默认参数，覆盖时必须原样带上
+        main = main.additional_browser_args(
+            "--remote-debugging-port=9222 --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection",
+        );
+    }
+    main.build()?;
 
     // 管理窗口（点关闭 = 隐藏到托盘）
     WebviewWindowBuilder::new(app, "manager", WebviewUrl::default())
@@ -54,11 +64,22 @@ fn create_windows(app: &tauri::App) -> tauri::Result<()> {
 }
 
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    // E2E 模式（PROMPTMATE_E2E=1，供 tauri-driver 全栈测试使用）：
+    // 跳过单实例、全局快捷键、剪贴板监听、自动同步与托盘，主窗口直接可见；
+    // 数据目录可用 PROMPTMATE_DATA_DIR 隔离到临时目录。正常启动完全不受影响
+    let e2e = std::env::var("PROMPTMATE_E2E").map(|v| v == "1").unwrap_or(false);
+
+    let builder = tauri::Builder::default();
+    let builder = if e2e {
+        builder
+    } else {
+        builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             eprintln!("[promptmate] single-instance callback fired");
             hotkey::show_quick_window(app);
         }))
+    };
+
+    builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
@@ -66,7 +87,7 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .setup(|app| {
+        .setup(move |app| {
             let handle = app.handle().clone();
             let mut store = store::Store::load(&handle)?;
             let first_run = store.is_first_run();
@@ -75,20 +96,22 @@ pub fn run() {
             store.save()?;
             app.manage(SharedStore::new(store));
 
-            clipboard::spawn(handle.clone());
-            sync::spawn_auto_sync(handle.clone());
+            if !e2e {
+                clipboard::spawn(handle.clone());
+                sync::spawn_auto_sync(handle.clone());
 
-            // 注册全部全局快捷键（面板主键 + 快速捕获 + 提示词独立键）
-            hotkey::register_all(&handle);
+                // 注册全部全局快捷键（面板主键 + 快速捕获 + 提示词独立键）
+                hotkey::register_all(&handle);
 
-            tray::create(&handle)?;
+                tray::create(&handle)?;
+            }
 
             // 窗口必须在 manage() 之后创建：webview 加载后前端会立即调用
             // get_data 等命令，若窗口先于数据初始化创建，命令会因 state
             // 未就绪而 panic（release 模式内嵌资源加载极快，必现）。
-            create_windows(app)?;
+            create_windows(app, e2e)?;
 
-            if first_run || recovered.is_some() {
+            if !e2e && (first_run || recovered.is_some()) {
                 hotkey::open_manager_window(&handle);
             }
             // 恢复提示由前端挂载后经 get_recovery_notice 主动拉取，
