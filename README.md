@@ -74,3 +74,7 @@ Windows NSIS 安装包、macOS Apple Silicon (M 系列芯片) 的 `.dmg`。
 | `Ctrl+S` | 管理窗口中保存提示词 |
 
 > 图片条目仅保存在本机（应用数据目录的 `images/`，macOS 路径同上），不参与云同步与 JSON 导出。
+
+## 许可证
+
+本项目基于 [MIT License](LICENSE) 开源发布。

@@ -2,6 +2,7 @@
 name = "promptmate"
 version = "0.1.1"
 description = "PromptMate 提示词助手"
+license = "MIT"
 authors = ["you"]
 edition = "2021"
 
