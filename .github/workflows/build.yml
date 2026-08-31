@@ -7,7 +7,45 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    name: Test (windows)
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust 编译缓存
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: 安装前端依赖
+        run: pnpm install --frozen-lockfile
+
+      # 测试门禁：任一环节失败则后续构建发版全部中断
+      - name: 前端与组件测试（Vitest）
+        run: pnpm test
+
+      - name: Rust 单元与集成测试（cargo test）
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: 类型检查与构建（vue-tsc + vite build）
+        run: pnpm build
+
   build:
+    needs: [test]
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     permissions:
