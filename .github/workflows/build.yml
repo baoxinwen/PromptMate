@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build Release
 
 on:
   push:
@@ -8,13 +8,26 @@ on:
 
 jobs:
   build:
-    name: 构建安装包
-    runs-on: windows-latest
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write # 打 tag 推送时创建 Release 需要写权限
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust 编译缓存
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: 安装 pnpm
         uses: pnpm/action-setup@v4
@@ -25,19 +38,24 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: 安装 Rust 工具链
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust 编译缓存
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-
       - name: 安装前端依赖
         run: pnpm install --frozen-lockfile
 
-      # 构建 NSIS 安装包；打 v* 标签推送时同时创建 GitHub Release 并附上 exe，
-      # 普通推送仅构建，产物在本次运行页面的 Artifacts 下载
+      # 先确保 Release 存在：tauri-action 在部分新仓库上创建 Release 会 403，
+      # 但上传到已存在的 Release 正常；此步骤幂等，已存在时直接跳过
+      - name: 确保 Release 存在
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --title "PromptMate $GITHUB_REF_NAME" \
+              --notes "PromptMate $GITHUB_REF_NAME"
+
+      # 构建 NSIS 安装包 / DMG；打 v* 标签推送时两个矩阵任务把产物
+      # 附加到同一个 Release，普通推送仅构建（产物在 Actions 运行页下载）
       - name: 构建 Tauri 应用
         uses: tauri-apps/tauri-action@v0
         env:
@@ -47,11 +65,3 @@ jobs:
           releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('PromptMate {0}', github.ref_name) || '' }}
           releaseDraft: false
           prerelease: false
-
-      - name: 上传构建产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: PromptMate-Windows-x64
-          path: src-tauri/target/release/bundle/nsis/*.exe
-          if-no-files-found: error
-          retention-days: 30
