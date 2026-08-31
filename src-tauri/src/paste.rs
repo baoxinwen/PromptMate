@@ -1,66 +1,122 @@
 use std::time::Duration;
 
-/// 用 Win32 SendInput 模拟按键序列（如 Ctrl+V / Ctrl+C）
-fn press_combo(vk_modifier: u16, vk_key: u16) {
-    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
-    };
+/// 模拟粘贴/复制/回车按键。Windows 用 SendInput(Ctrl+V)，macOS 用 CGEvent(Cmd+V)。
+#[cfg(windows)]
+mod keys {
+    fn press_combo(vk_modifier: u16, vk_key: u16) {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+            SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
+        };
 
-    fn key(vk: u16, keyup: bool) -> INPUT {
-        INPUT {
-            r#type: INPUT_KEYBOARD,
-            Anonymous: INPUT_0 {
-                ki: KEYBDINPUT {
-                    wVk: vk,
-                    wScan: 0,
-                    dwFlags: if keyup { KEYEVENTF_KEYUP } else { 0 },
-                    time: 0,
-                    dwExtraInfo: 0,
+        fn key(vk: u16, keyup: bool) -> INPUT {
+            INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: vk,
+                        wScan: 0,
+                        dwFlags: if keyup { KEYEVENTF_KEYUP } else { 0 },
+                        time: 0,
+                        dwExtraInfo: 0,
+                    },
                 },
-            },
+            }
+        }
+
+        let inputs = [
+            key(vk_modifier, false),
+            key(vk_key, false),
+            key(vk_key, true),
+            key(vk_modifier, true),
+        ];
+        unsafe {
+            SendInput(
+                inputs.len() as u32,
+                inputs.as_ptr(),
+                std::mem::size_of::<INPUT>() as i32,
+            );
         }
     }
 
-    let inputs = [
-        key(vk_modifier, false),
-        key(vk_key, false),
-        key(vk_key, true),
-        key(vk_modifier, true),
-    ];
-    unsafe {
-        SendInput(
-            inputs.len() as u32,
-            inputs.as_ptr(),
-            std::mem::size_of::<INPUT>() as i32,
-        );
+    pub fn press_paste() {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_V;
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_CONTROL;
+        press_combo(VK_CONTROL, VK_V);
+    }
+
+    /// 单键模拟（无修饰键），用于粘贴后追加回车
+    pub fn press_enter() {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_RETURN;
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+            keybd_event, KEYEVENTF_KEYUP,
+        };
+        unsafe {
+            keybd_event(VK_RETURN as u8, 0, 0, 0);
+            keybd_event(VK_RETURN as u8, 0, KEYEVENTF_KEYUP, 0);
+        }
+    }
+
+    pub fn press_copy() {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_C;
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_CONTROL;
+        press_combo(VK_CONTROL, VK_C);
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod keys {
+    use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation};
+    use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+
+    const KEY_V: u16 = 9;
+    const KEY_C: u16 = 8;
+    const KEY_RETURN: u16 = 36;
+    const CMD: CGEventFlags = CGEventFlags::CGEventFlagCommand;
+
+    fn post_key(keycode: u16, flags: CGEventFlags, keydown: bool) {
+        let Ok(source) = CGEventSource::new(CGEventSourceStateID::CombinedSessionState) else {
+            return;
+        };
+        if let Ok(event) = CGEvent::new_keyboard_event(source, keycode, keydown) {
+            event.set_flags(flags);
+            event.post(CGEventTapLocation::HID);
+        }
+    }
+
+    fn press_combo(keycode: u16) {
+        post_key(keycode, CMD, true);
+        post_key(keycode, CMD, false);
+    }
+
+    pub fn press_paste() {
+        press_combo(KEY_V);
+    }
+
+    pub fn press_enter() {
+        post_key(KEY_RETURN, CGEventFlags::empty(), true);
+        post_key(KEY_RETURN, CGEventFlags::empty(), false);
+    }
+
+    pub fn press_copy() {
+        press_combo(KEY_C);
     }
 }
 
 pub fn press_ctrl_v() {
-    use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_V;
-    use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_CONTROL;
-    press_combo(VK_CONTROL, VK_V);
+    keys::press_paste();
 }
 
-/// 单键模拟（无修饰键），用于粘贴后追加回车
 pub fn press_enter() {
-    use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_RETURN;
-    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-        keybd_event, KEYEVENTF_KEYUP,
-    };
-    unsafe {
-        keybd_event(VK_RETURN as u8, 0, 0, 0);
-        keybd_event(VK_RETURN as u8, 0, KEYEVENTF_KEYUP, 0);
-    }
+    keys::press_enter();
 }
 
 pub fn press_ctrl_c() {
-    use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_C;
-    use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_CONTROL;
-    press_combo(VK_CONTROL, VK_C);
+    keys::press_copy();
 }
 
-/// 呼出面板前的前台窗口，粘贴时唤回它，保证粘贴落点正确
+/// 呼出面板前的前台窗口，粘贴时唤回它，保证粘贴落点正确。
+/// macOS 上隐藏自身窗口后系统会自动把焦点还给前一个应用，
+/// 因此不需要记录/恢复前台窗口，全部返回 None 即可。
 #[cfg(windows)]
 pub mod foreground {
     use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
@@ -109,6 +165,22 @@ pub mod foreground {
     }
 }
 
+#[cfg(target_os = "macos")]
+#[allow(dead_code)] // macOS 上隐藏面板即归还焦点，这些接口仅保留以对齐 Windows 侧签名
+pub mod foreground {
+    pub fn current() -> Option<isize> {
+        None
+    }
+
+    pub fn is_foreground(_hwnd: isize) -> bool {
+        true
+    }
+
+    pub fn restore(_hwnd: isize) -> bool {
+        true
+    }
+}
+
 pub fn set_clipboard_text(text: &str) -> Result<(), String> {
     arboard::Clipboard::new()
         .and_then(|mut c| c.set_text(text.to_string()))
@@ -119,9 +191,10 @@ pub fn get_clipboard_text() -> Option<String> {
     arboard::Clipboard::new().and_then(|mut c| c.get_text()).ok()
 }
 
-/// 恢复目标窗口焦点并模拟 Ctrl+V（可选追加回车）。
+/// 恢复目标窗口焦点并模拟粘贴（可选追加回车）。
 /// Windows 下在发送前校验目标确实回到前台，失败重试一次，仍失败则放弃——
 /// 固定延时无法保证焦点切换成功，盲发会把内容粘进恰好在前台的其他应用。
+/// macOS 下隐藏面板即自动还焦点给前一个应用，直接发送 Cmd+V。
 pub fn send_paste(target: Option<isize>, append_enter: bool) {
     #[cfg(windows)]
     match target {
@@ -152,7 +225,7 @@ pub fn send_paste(target: Option<isize>, append_enter: bool) {
             }
         }
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
         let _ = target;
         std::thread::sleep(Duration::from_millis(200));
@@ -164,7 +237,7 @@ pub fn send_paste(target: Option<isize>, append_enter: bool) {
     }
 }
 
-/// 后台粘贴核心：写入剪贴板（含恢复准备）→ 唤回目标窗口 → 模拟 Ctrl+V → 按设置恢复原剪贴板。
+/// 后台粘贴核心：写入剪贴板（含恢复准备）→ 唤回目标窗口 → 模拟粘贴 → 按设置恢复原剪贴板。
 /// 调用方负责在需要时先行隐藏窗口 / 记录 paste_target。
 pub fn paste_text(app: &tauri::AppHandle, text: &str) -> Result<(), String> {
     let (restore_clipboard, append_enter) = {
