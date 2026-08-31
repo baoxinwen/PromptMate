@@ -1,0 +1,198 @@
+/* ============================================
+   PromptMate 设计令牌 ·「指令台 Prompt Deck」
+   深色为结构默认（:root），亮色 / 跟随系统为覆盖层
+   配套规范：design-system/promptmate/MASTER.md
+   签名元素：键帽（kbd）与 {{变量}} 等宽记号
+   ============================================ */
+
+:root {
+  /* 字体：界面声部 + 数据声部（等宽） */
+  --font-ui: 'Inter', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+
+  /* 字阶（6 级） */
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-base: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+  --fs-2xl: 23px;
+
+  /* z-index 刻度 */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-sticky: 20;
+  --z-overlay: 40;
+  --z-toast: 100;
+
+  /* 品牌：靛为主、紫为辅；渐变只允许出现在品牌标与命令栏聚焦光晕两处 */
+  --brand: #8b93ff;
+  --brand-strong: #a5abff;
+  --brand-btn: #616df2;
+  --brand-btn-hover: #7480ff;
+  --on-brand: #ffffff;
+  --brand-2: #b48cff;
+  --brand-grad: linear-gradient(120deg, #8b93ff 0%, #b48cff 100%);
+  --brand-soft: rgba(139, 147, 255, 0.12);
+  --brand-soft-2: rgba(139, 147, 255, 0.22);
+  --ring: rgba(139, 147, 255, 0.55);
+  --glow: 0 0 0 1px var(--brand-soft-2), 0 0 24px rgba(139, 147, 255, 0.16);
+
+  /* 中性色（石墨 · 深色默认，微冷不偏蓝） */
+  --bg: #0e0e12;
+  --bg-soft: #121217;
+  --panel: #17181f;
+  --panel-2: #1d1e27;
+  --panel-3: #252633;
+  --panel-glass: rgba(23, 24, 31, 0.86);
+  --border: rgba(255, 255, 255, 0.065);
+  --border-strong: rgba(255, 255, 255, 0.13);
+  --text: #f2f2f6;
+  --text-2: #bebccb;
+  --muted: #888aa0;
+  --faint: #5c5e72;
+
+  /* 功能色（语义，小面积使用） */
+  --danger: #ff8585;
+  --danger-btn: #e5484d;
+  --danger-soft: rgba(229, 72, 77, 0.14);
+  --ok: #4ade80;
+  --ok-soft: rgba(74, 222, 128, 0.12);
+  --warn: #ffc94d;
+  --warn-soft: rgba(255, 201, 77, 0.13);
+
+  /* 交互 */
+  --accent: var(--brand);
+  --input-bg: #1a1b24;
+  --input-focus-bg: #1e1f2b;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.14);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.26);
+  --mask-bg: rgba(6, 6, 10, 0.62);
+
+  /* 圆角 */
+  --r-xs: 6px;
+  --r-sm: 9px;
+  --r-md: 13px;
+  --r-lg: 17px;
+
+  /* 阴影与光 */
+  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 16px 48px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-brand: 0 4px 18px rgba(97, 109, 242, 0.28);
+
+  /* 动效 */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --t-fast: 120ms var(--ease);
+  --t-med: 200ms var(--ease);
+
+  /* 旧令牌别名（兼容未迁移的引用） */
+  --brand-a: var(--brand);
+  --brand-b: var(--brand-2);
+  --brand-gradient: var(--brand-grad);
+  --radius-sm: var(--r-sm);
+
+  color-scheme: dark;
+}
+
+/* ---------- 亮色主题 ---------- */
+:root[data-theme='light'] {
+  --brand: #5a63e8;
+  --brand-strong: #4952d6;
+  --brand-btn: #5a63e8;
+  --brand-btn-hover: #6b74ef;
+  --brand-2: #9a6bff;
+  --brand-grad: linear-gradient(120deg, #5a63e8 0%, #9a6bff 100%);
+  --brand-soft: rgba(90, 99, 232, 0.1);
+  --brand-soft-2: rgba(90, 99, 232, 0.18);
+  --ring: rgba(90, 99, 232, 0.45);
+  --glow: 0 0 0 1px var(--brand-soft-2), 0 0 20px rgba(90, 99, 232, 0.14);
+
+  --bg: #f6f6f8;
+  --bg-soft: #efeff3;
+  --panel: #ffffff;
+  --panel-2: #f3f3f7;
+  --panel-3: #eaeaf0;
+  --panel-glass: rgba(255, 255, 255, 0.9);
+  --border: rgba(24, 24, 48, 0.09);
+  --border-strong: rgba(24, 24, 48, 0.17);
+  --text: #24252e;
+  --text-2: #52546a;
+  --muted: #7b7d95;
+  --faint: #a6a8bc;
+
+  --danger: #d93a40;
+  --danger-btn: #d93a40;
+  --danger-soft: rgba(217, 58, 64, 0.1);
+  --ok: #189a4c;
+  --ok-soft: rgba(24, 154, 76, 0.1);
+  --warn: #a16207;
+  --warn-soft: rgba(161, 98, 7, 0.1);
+
+  --input-bg: #ffffff;
+  --input-focus-bg: #ffffff;
+  --scrollbar-thumb: rgba(24, 24, 48, 0.18);
+  --scrollbar-thumb-hover: rgba(24, 24, 48, 0.3);
+  --mask-bg: rgba(20, 20, 40, 0.4);
+
+  --shadow-1: 0 1px 4px rgba(24, 24, 48, 0.07);
+  --shadow-2: 0 16px 48px rgba(24, 24, 48, 0.16), 0 2px 8px rgba(24, 24, 48, 0.08);
+  --shadow-brand: 0 4px 16px rgba(90, 99, 232, 0.24);
+
+  color-scheme: light;
+}
+
+/* ---------- 跟随系统：深 ---------- */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='auto'] {
+    color-scheme: dark;
+  }
+}
+
+/* ---------- 跟随系统：亮 ---------- */
+@media (prefers-color-scheme: light) {
+  :root[data-theme='auto'] {
+    --brand: #5a63e8;
+    --brand-strong: #4952d6;
+    --brand-btn: #5a63e8;
+    --brand-btn-hover: #6b74ef;
+    --brand-2: #9a6bff;
+    --brand-grad: linear-gradient(120deg, #5a63e8 0%, #9a6bff 100%);
+    --brand-soft: rgba(90, 99, 232, 0.1);
+    --brand-soft-2: rgba(90, 99, 232, 0.18);
+    --ring: rgba(90, 99, 232, 0.45);
+    --glow: 0 0 0 1px var(--brand-soft-2), 0 0 20px rgba(90, 99, 232, 0.14);
+
+    --bg: #f6f6f8;
+    --bg-soft: #efeff3;
+    --panel: #ffffff;
+    --panel-2: #f3f3f7;
+    --panel-3: #eaeaf0;
+    --panel-glass: rgba(255, 255, 255, 0.9);
+    --border: rgba(24, 24, 48, 0.09);
+    --border-strong: rgba(24, 24, 48, 0.17);
+    --text: #24252e;
+    --text-2: #52546a;
+    --muted: #7b7d95;
+    --faint: #a6a8bc;
+
+    --danger: #d93a40;
+    --danger-btn: #d93a40;
+    --danger-soft: rgba(217, 58, 64, 0.1);
+    --ok: #189a4c;
+    --ok-soft: rgba(24, 154, 76, 0.1);
+    --warn: #a16207;
+    --warn-soft: rgba(161, 98, 7, 0.1);
+
+    --input-bg: #ffffff;
+    --input-focus-bg: #ffffff;
+    --scrollbar-thumb: rgba(24, 24, 48, 0.18);
+    --scrollbar-thumb-hover: rgba(24, 24, 48, 0.3);
+    --mask-bg: rgba(20, 20, 40, 0.4);
+
+    --shadow-1: 0 1px 4px rgba(24, 24, 48, 0.07);
+    --shadow-2: 0 16px 48px rgba(24, 24, 48, 0.16), 0 2px 8px rgba(24, 24, 48, 0.08);
+    --shadow-brand: 0 4px 16px rgba(90, 99, 232, 0.24);
+
+    color-scheme: light;
+  }
+}

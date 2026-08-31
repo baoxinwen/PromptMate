@@ -1,0 +1,373 @@
+/* ============================================
+   基础样式：reset + 通用组件类
+   视觉语言：石墨底 / 靛紫强调 / 键帽与等宽记号
+   ============================================ */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100vh;
+}
+
+::selection {
+  background: var(--brand-soft-2);
+}
+
+/* 键盘导航可见焦点环（鼠标点击不触发） */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------- 表单控件 ---------- */
+
+input[type='text'],
+input[type='password'],
+input[type='search'],
+textarea,
+select {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 8px 11px;
+  outline: none;
+  color: var(--text);
+  transition: border-color var(--t-fast), background var(--t-fast), box-shadow var(--t-fast);
+  user-select: text;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--faint);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--brand);
+  background: var(--input-focus-bg);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+textarea {
+  resize: vertical;
+  line-height: 1.65;
+}
+
+select {
+  cursor: pointer;
+}
+
+/* ---------- 按钮 ---------- */
+
+button {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  border-radius: var(--r-sm);
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast),
+    box-shadow var(--t-fast), color var(--t-fast);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+button:hover {
+  background: var(--panel-3);
+  border-color: var(--border-strong);
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+/* 主操作：全应用唯一的实心靛蓝，替代旧渐变按钮 */
+button.primary {
+  background: var(--brand-btn);
+  border: 1px solid transparent;
+  color: var(--on-brand);
+  font-weight: 600;
+  box-shadow: var(--shadow-brand);
+}
+
+button.primary:hover {
+  background: var(--brand-btn-hover);
+  box-shadow: 0 6px 22px rgba(97, 109, 242, 0.36);
+}
+
+button.danger {
+  color: var(--danger);
+}
+
+button.danger:hover {
+  border-color: var(--danger-btn);
+  background: var(--danger-soft);
+}
+
+button.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+button.ghost:hover {
+  background: var(--panel-2);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ---------- 开关 ---------- */
+
+.switch {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  flex: none;
+  cursor: pointer;
+  display: inline-block;
+}
+
+.switch input {
+  display: none;
+}
+
+.switch .track {
+  position: absolute;
+  inset: 0;
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  transition: background var(--t-med), border-color var(--t-med);
+}
+
+.switch .thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform var(--t-med), background var(--t-med);
+}
+
+.switch input:checked + .track {
+  background: var(--brand-btn);
+  border-color: transparent;
+}
+
+.switch input:checked + .track .thumb {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+/* ---------- 通用工具 ---------- */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.faint {
+  color: var(--faint);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* 键帽：全站签名元素——真实按键的立体质感 */
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 2.5px 6px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, var(--panel-3) 0%, var(--panel-2) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  line-height: 1.3;
+}
+
+/* 卡片 */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+/* ---------- Toast ---------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  padding: 9px 18px;
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-2);
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  z-index: 100;
+  max-width: 76vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+@starting-style {
+  .toast {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+}
+
+.toast::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 9px;
+  flex: none;
+  background: var(--ok);
+}
+
+.toast.err::before {
+  background: var(--danger-btn);
+}
+
+.toast.err {
+  border-color: var(--danger-btn);
+}
+
+.toast.ok {
+  border-color: var(--border-strong);
+}
+
+/* ---------- 滚动条 ---------- */
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- 通用动效 ---------- */
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: fade-up 240ms var(--ease);
+}
+
+/* ---------- 可访问性：reduced-motion（更温和，不是零） ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  /* 位移动画降为纯 opacity 短淡入 */
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 80ms !important;
+  }
+}
+
+/* ---------- 计数位等宽数字 ---------- */
+
+.tnum {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 品牌名/标题 display 处理 */
+.display {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
