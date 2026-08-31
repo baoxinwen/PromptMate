@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import KeyCap from './ui/KeyCap.vue';
+import { hotkeyHint, isMac } from '../lib/platform';
 
 defineProps<{ modelValue: string; placeholder?: string }>();
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>();
@@ -20,15 +21,17 @@ function onCaptureKeydown(e: KeyboardEvent) {
     return; // 必须带修饰键，忽略纯字母/数字按键
   }
   // 系统保留组合键不允许绑定（否则 Alt+F4 会被全局快捷键抢走，关不掉窗口）
-  if (e.altKey && e.key === 'F4') return;
+  if (!isMac && e.altKey && e.key === 'F4') return;
   const parts: string[] = [];
   if (e.ctrlKey) parts.push('ctrl');
   if (e.altKey) parts.push('alt');
   if (e.metaKey) parts.push('super');
   if (e.shiftKey) parts.push('shift');
   let key = e.key;
-  // 数字键用 e.code 归一：Shift+数字时 e.key 是符号（如 !），accelerator 无法注册
+  // 数字键用 e.code 归一：Shift+数字时 e.key 是符号（如 !），accelerator 无法注册；
+  // 字母键在 macOS 上 Option+字母 产生组合字符（如 π），同样用 e.code 归一
   if (/^Digit[0-9]$/.test(e.code)) key = e.code.slice(5);
+  else if (/^Key[A-Z]$/.test(e.code)) key = e.code.slice(3);
   else if (/^[a-z]$/i.test(key)) key = key.toUpperCase();
   else if (/^F\d{1,2}$/.test(key)) key = key.toUpperCase();
   else if (key === ' ') key = 'space';
@@ -68,7 +71,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onCaptureKeydown, tr
     <div v-if="capturing" class="cap-mask" @mousedown.self="capturing = false">
       <div class="cap-card fade-up">
         <div class="cap-title">请按下新的快捷键</div>
-        <div class="cap-hint mono">{{ placeholder || '需包含 Alt / Ctrl / Win 修饰键' }}</div>
+        <div class="cap-hint mono">{{ placeholder || hotkeyHint }}</div>
         <div class="cap-keys"><kbd>Esc</kbd> 取消</div>
       </div>
     </div>

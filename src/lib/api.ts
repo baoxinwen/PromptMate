@@ -25,6 +25,8 @@ export const api = {
   pasteImage: (id: string) => invoke<void>('paste_image', { id }),
 
   getClipboardText: () => invoke<string | null>('get_clipboard_text'),
+  checkAccessibility: () => invoke<boolean>('check_accessibility'),
+  openAccessibilitySettings: () => invoke<void>('open_accessibility_settings'),
   getVarMemory: (promptId: string) =>
     invoke<Record<string, string>>('get_var_memory', { promptId }),
   saveVarMemory: (promptId: string, values: Record<string, string>) =>

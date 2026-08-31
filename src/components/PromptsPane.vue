@@ -21,6 +21,7 @@ import { categoryColor } from '../lib/categoryColor';
 import { emptyPrompt } from '../types';
 import type { Prompt } from '../types';
 import HotkeyInput from './HotkeyInput.vue';
+import { isMac } from '../lib/platform';
 import EmptyState from './ui/EmptyState.vue';
 import CategoryBadge from './ui/CategoryBadge.vue';
 import AccentButton from './ui/AccentButton.vue';
@@ -442,7 +443,7 @@ function fmtTime(ts: number) {
                 </div>
                 <HotkeyInput
                   :model-value="draft.hotkey"
-                  placeholder="如 Ctrl+Alt+1；保存后生效"
+                  :placeholder="isMac ? '如 Cmd+Option+1；保存后生效' : '如 Ctrl+Alt+1；保存后生效'"
                   @update:model-value="
                     (v) => {
                       if (!draft) return;

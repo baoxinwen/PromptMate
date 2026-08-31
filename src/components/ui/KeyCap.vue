@@ -1,26 +1,12 @@
 <script setup lang="ts">
-/** 键帽视觉（显示快捷键组合） */
-defineProps<{ combo: string }>();
+/** 键帽视觉（显示快捷键组合），按平台显示 Win 风格或 macOS 符号 */
+import { keyLabel } from '../../lib/platform';
 
-const LABELS: Record<string, string> = {
-  ctrl: 'Ctrl',
-  alt: 'Alt',
-  shift: 'Shift',
-  super: 'Win',
-  meta: 'Win',
-  space: 'Space',
-  enter: 'Enter',
-  esc: 'Esc',
-  tab: 'Tab',
-};
+defineProps<{ combo: string }>();
 
 function keys(combo: string): string[] {
   if (!combo) return [];
-  return combo.split('+').map((p) => {
-    const k = p.trim().toLowerCase();
-    if (LABELS[k]) return LABELS[k];
-    return k.length === 1 ? k.toUpperCase() : k.charAt(0).toUpperCase() + k.slice(1);
-  });
+  return combo.split('+').map(keyLabel);
 }
 </script>
 

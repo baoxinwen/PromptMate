@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { inject, onMounted, ref } from 'vue';
-import { Monitor, Moon, Sun, FolderOpen, Keyboard, Palette, SlidersHorizontal } from 'lucide-vue-next';
+import { inject, onBeforeUnmount, onMounted, ref } from 'vue';
+import { Monitor, Moon, Sun, FolderOpen, Keyboard, Palette, SlidersHorizontal, ShieldAlert } from 'lucide-vue-next';
 import { api } from '../lib/api';
 import { managerKey } from '../lib/context';
+import { isMac } from '../lib/platform';
 import HotkeyInput from './HotkeyInput.vue';
 
 const ctx = inject(managerKey)!;
@@ -14,6 +15,16 @@ const pasteAppendEnter = ref(false);
 const captureClipboard = ref(true);
 const theme = ref('dark');
 const autostart = ref(false);
+const accessibilityGranted = ref(true);
+
+async function checkAccessibility() {
+  if (!isMac) return;
+  try {
+    accessibilityGranted.value = await api.checkAccessibility();
+  } catch {
+    /* 检测失败按已授权处理，避免误报 */
+  }
+}
 
 async function load() {
   const s = ctx.data.value?.settings;
@@ -101,7 +112,12 @@ const themes = [
   { id: 'auto', label: '跟随系统', icon: Monitor, cls: 'th-auto' },
 ] as const;
 
-onMounted(load);
+onMounted(() => {
+  load();
+  checkAccessibility();
+});
+const accessibilityTimer = setInterval(() => checkAccessibility(), 3000);
+onBeforeUnmount(() => clearInterval(accessibilityTimer));
 </script>
 
 <template>
@@ -112,6 +128,17 @@ onMounted(load);
     </header>
 
     <div class="st-body">
+      <div v-if="isMac && !accessibilityGranted" class="st-card mac-perm">
+        <div class="sec-head">
+          <span class="sec-ico"><ShieldAlert :size="14" /></span>
+          <h3>需要辅助功能权限</h3>
+        </div>
+        <p class="mac-perm-text">
+          自动粘贴与快速捕获（模拟 Cmd+C / Cmd+V）需要系统「辅助功能」权限。点击下方按钮前往
+          系统设置 → 隐私与安全性 → 辅助功能，勾选 PromptMate 后重启应用即可。
+        </p>
+        <button class="primary" @click="api.openAccessibilitySettings()">打开系统设置</button>
+      </div>
       <div class="st-card">
         <div class="sec-head">
           <span class="sec-ico"><Keyboard :size="14" /></span>
@@ -258,6 +285,21 @@ onMounted(load);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   padding: 6px 18px 12px;
+}
+
+.mac-perm {
+  border-color: color-mix(in srgb, #f59e0b 45%, var(--border));
+}
+
+.mac-perm-text {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.mac-perm .primary {
+  margin-bottom: 12px;
 }
 
 .sec-head {

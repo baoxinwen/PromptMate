@@ -61,18 +61,43 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
 }
 
 fn display_hotkey(accel: &str) -> String {
+    let macos = cfg!(target_os = "macos");
     accel
         .split('+')
         .map(|p| {
             let p = p.trim();
             match p.to_lowercase().as_str() {
-                "alt" => "Alt".into(),
-                "ctrl" | "control" | "commandorcontrol" | "cmd" => "Ctrl".into(),
-                "shift" => "Shift".into(),
-                "super" | "meta" => "Win".into(),
+                "alt" => {
+                    if macos {
+                        "⌥".into()
+                    } else {
+                        "Alt".into()
+                    }
+                }
+                "ctrl" | "control" | "commandorcontrol" => {
+                    if macos {
+                        "⌃".into()
+                    } else {
+                        "Ctrl".into()
+                    }
+                }
+                "shift" => {
+                    if macos {
+                        "⇧".into()
+                    } else {
+                        "Shift".into()
+                    }
+                }
+                "super" | "meta" | "cmd" | "command" => {
+                    if macos {
+                        "⌘".into()
+                    } else {
+                        "Win".into()
+                    }
+                }
                 other => other.to_uppercase(),
             }
         })
         .collect::<Vec<_>>()
-        .join("+")
+        .join(if macos { "" } else { "+" })
 }
