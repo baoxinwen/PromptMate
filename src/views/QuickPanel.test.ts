@@ -220,4 +220,34 @@ describe('QuickPanel：快捷面板', () => {
     expect((wrapper.find('input.qp-search').element as HTMLInputElement).value).toBe('');
     wrapper.unmount();
   });
+
+  it('回归：变量窗取消后焦点回到搜索框，↑↓ 导航恢复', async () => {
+    const wrapper = await mountPanel();
+    // 通过 open-prompt 事件打开变量窗（p2 含 {{本周工作}}）
+    const { listen } = await import('@tauri-apps/api/event');
+    const openCall = vi
+      .mocked(listen)
+      .mock.calls.find(([name]) => name === 'open-prompt')!;
+    (openCall[1] as (e: { payload: string }) => void)({ payload: 'p2' });
+    await flushPromises();
+
+    const dialog = wrapper.findComponent(VarDialog);
+    expect(dialog.exists()).toBe(true);
+    // 变量窗挂载后焦点在其输入框上
+    expect(document.activeElement?.tagName).toBe('TEXTAREA');
+
+    // Esc 取消 → 变量窗卸载
+    await dialog.findAll('textarea')[0].trigger('keydown', { key: 'Escape' });
+    await flushPromises();
+    expect(wrapper.findComponent(VarDialog).exists()).toBe(false);
+
+    // 修复目标：焦点必须回到搜索框——否则键盘事件落在 body 上，
+    // 不再经过面板根元素，↑↓/Enter/Esc 全部失效（修前红：activeElement 是 body）
+    expect(document.activeElement).toBe(wrapper.find('input.qp-search').element);
+
+    // 用户可见行为：方向键导航恢复
+    await wrapper.find('.qp').trigger('keydown', { key: 'ArrowDown' });
+    expect(wrapper.findAll('.qp-list .item')[1].classes()).toContain('active');
+    wrapper.unmount();
+  });
 });

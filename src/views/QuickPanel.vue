@@ -12,6 +12,7 @@ import {
 import { api } from '../lib/api';
 import { filterClipboard, filterPrompts, formatTime, preview, highlightSegs } from '../lib/search';
 import { hasManualVars } from '../lib/vars';
+import { computePanelHeight } from '../lib/panelHeight';
 import { categoryColor } from '../lib/categoryColor';
 import type { AppData, ClipboardItem, Prompt } from '../types';
 import VarDialog from '../components/VarDialog.vue';
@@ -132,14 +133,32 @@ watch(active, () => {
   });
 });
 
-/** 面板高度自适应：内容变化后测量并通知 Rust 调整窗口高度 */
+/** 面板高度自适应：内容变化后按内容计算期望高度并通知 Rust 调整窗口。
+ *  必须用列表 scrollHeight（内容高）而非根元素 offsetHeight——根元素被
+ *  max-height:100vh 封顶（=当前窗口高度），窗口变小后测量值随之变小，
+ *  高度将只缩不涨（重开面板只剩两行的根因）。 */
 let resizeObs: ResizeObserver | undefined;
 let heightTimer: ReturnType<typeof setTimeout> | undefined;
 function syncHeight() {
   clearTimeout(heightTimer);
   heightTimer = setTimeout(() => {
-    const h = rootEl.value?.offsetHeight ?? 0;
-    if (h > 100) api.setPanelHeight(h).catch(() => {});
+    const head = rootEl.value?.querySelector<HTMLElement>('.qp-head');
+    const chips = rootEl.value?.querySelector<HTMLElement>('.qp-chips');
+    const foot = rootEl.value?.querySelector<HTMLElement>('.qp-foot');
+    if (!head || !chips || !foot || !listEl.value) return;
+    const parts = {
+      head: head.offsetHeight,
+      chips: chips.offsetHeight,
+      list: listEl.value.scrollHeight,
+      foot: foot.offsetHeight,
+    };
+    const h = computePanelHeight({
+      head: parts.head,
+      chips: parts.chips,
+      listContent: parts.list,
+      foot: parts.foot,
+    });
+    api.setPanelHeight(h).catch(() => {});
   }, 16);
 }
 
@@ -263,7 +282,15 @@ function resetSession() {
   detailOpen.value = false;
   varDialogPrompt.value = null;
   searchInput.value?.focus();
+  syncHeight();
 }
+
+// 变量窗卸载时焦点随其输入框消失（落到 body 上），键盘事件不再经过
+// 面板根元素，↑↓/Enter/Esc 将全部失效；关闭（确认或取消）后必须把
+// 焦点还给搜索框
+watch(varDialogPrompt, (v) => {
+  if (!v) nextTick(() => searchInput.value?.focus());
+});
 
 onMounted(async () => {
   window.addEventListener('pm-panel-shown', resetSession);
