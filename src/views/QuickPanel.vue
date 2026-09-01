@@ -617,6 +617,7 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   padding: 2px 8px 8px;
   min-height: 0;
+  /* 与 panelHeight.ts 的 PANEL_LIST_MAX 保持一致 */
   max-height: 420px;
   flex: 1 1 auto;
   display: flex;

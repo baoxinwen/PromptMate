@@ -436,7 +436,8 @@ pub fn close_capture(app: AppHandle) {
     crate::capture::hide(&app);
 }
 
-/// 快捷面板高度自适应：前端测量内容高度后调用，窗口随之伸缩
+/// 快捷面板高度自适应：前端测量内容高度后调用，窗口随之伸缩。
+/// 最小托底 300 与前端 panelHeight.ts 的 PANEL_MIN 保持一致
 #[tauri::command]
 pub fn set_panel_height(app: AppHandle, height: f64) {
     use tauri::LogicalSize;

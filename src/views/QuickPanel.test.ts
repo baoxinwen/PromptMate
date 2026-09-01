@@ -173,6 +173,8 @@ describe('QuickPanel：快捷面板', () => {
 
     expect(mockedApi.invokePaste).toHaveBeenCalledWith('本周完成：写完了三个模块', 'p2');
     expect(wrapper.findComponent(VarDialog).exists()).toBe(false);
+    // 确认路径同样恢复焦点（回归：卸载后焦点落 body，键盘导航全失效）
+    expect(document.activeElement).toBe(wrapper.find('input.qp-search').element);
     wrapper.unmount();
   });
 
@@ -221,7 +223,8 @@ describe('QuickPanel：快捷面板', () => {
     wrapper.unmount();
   });
 
-  it('回归：变量窗取消后焦点回到搜索框，↑↓ 导航恢复', async () => {    const wrapper = await mountPanel();
+  it('回归：变量窗取消后焦点回到搜索框，↑↓ 导航恢复', async () => {
+    const wrapper = await mountPanel();
     // 通过 open-prompt 事件打开变量窗（p2 含 {{本周工作}}）
     const { listen } = await import('@tauri-apps/api/event');
     const openCall = vi
