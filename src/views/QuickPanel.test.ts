@@ -221,8 +221,7 @@ describe('QuickPanel：快捷面板', () => {
     wrapper.unmount();
   });
 
-  it('回归：变量窗取消后焦点回到搜索框，↑↓ 导航恢复', async () => {
-    const wrapper = await mountPanel();
+  it('回归：变量窗取消后焦点回到搜索框，↑↓ 导航恢复', async () => {    const wrapper = await mountPanel();
     // 通过 open-prompt 事件打开变量窗（p2 含 {{本周工作}}）
     const { listen } = await import('@tauri-apps/api/event');
     const openCall = vi
@@ -248,6 +247,16 @@ describe('QuickPanel：快捷面板', () => {
     // 用户可见行为：方向键导航恢复
     await wrapper.find('.qp').trigger('keydown', { key: 'ArrowDown' });
     expect(wrapper.findAll('.qp-list .item')[1].classes()).toContain('active');
+    wrapper.unmount();
+  });
+
+  it('回归：列表内容包在 .qp-list-inner 中，供高度测量取自然内容高', async () => {
+    // 高度自适应以 .qp-list-inner 的自然高度为测量源；窗口被最小高度
+    // 托底时由面板填满窗口（height:100vh），不再露出空白底条
+    const wrapper = await mountPanel();
+    const inner = wrapper.find('.qp-list .qp-list-inner');
+    expect(inner.exists()).toBe(true);
+    expect(wrapper.findAll('.qp-list .qp-list-inner .item').length).toBe(3);
     wrapper.unmount();
   });
 });

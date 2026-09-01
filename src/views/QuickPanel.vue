@@ -29,6 +29,7 @@ const active = ref(0);
 const detailOpen = ref(false);
 const searchInput = ref<HTMLInputElement | null>(null);
 const listEl = ref<HTMLElement | null>(null);
+const listInnerEl = ref<HTMLElement | null>(null);
 const rootEl = ref<HTMLElement | null>(null);
 const atTop = ref(true);
 const atBottom = ref(true);
@@ -134,9 +135,9 @@ watch(active, () => {
 });
 
 /** 面板高度自适应：内容变化后按内容计算期望高度并通知 Rust 调整窗口。
- *  必须用列表 scrollHeight（内容高）而非根元素 offsetHeight——根元素被
- *  max-height:100vh 封顶（=当前窗口高度），窗口变小后测量值随之变小，
- *  高度将只缩不涨（重开面板只剩两行的根因）。 */
+ *  必须用列表内层的自然内容高（.qp-list-inner）而非根元素 offsetHeight——
+ *  根元素被 max-height:100vh 封顶（=当前窗口高度），窗口变小后测量值
+ *  随之变小，高度将只缩不涨（重开面板只剩两行的根因）。 */
 let resizeObs: ResizeObserver | undefined;
 let heightTimer: ReturnType<typeof setTimeout> | undefined;
 function syncHeight() {
@@ -145,18 +146,12 @@ function syncHeight() {
     const head = rootEl.value?.querySelector<HTMLElement>('.qp-head');
     const chips = rootEl.value?.querySelector<HTMLElement>('.qp-chips');
     const foot = rootEl.value?.querySelector<HTMLElement>('.qp-foot');
-    if (!head || !chips || !foot || !listEl.value) return;
-    const parts = {
+    if (!head || !chips || !foot || !listInnerEl.value) return;
+    const h = computePanelHeight({
       head: head.offsetHeight,
       chips: chips.offsetHeight,
-      list: listEl.value.scrollHeight,
+      listContent: listInnerEl.value.offsetHeight,
       foot: foot.offsetHeight,
-    };
-    const h = computePanelHeight({
-      head: parts.head,
-      chips: parts.chips,
-      listContent: parts.list,
-      foot: parts.foot,
     });
     api.setPanelHeight(h).catch(() => {});
   }, 16);
@@ -304,9 +299,11 @@ onMounted(async () => {
     const p = data.value?.prompts.find((x) => x.id === e.payload);
     if (p) varDialogPrompt.value = p;
   });
-  // 高度自适应
+  // 高度自适应：同时观察根元素（窗口变化）与列表内层（内容变化）——
+  // 窗口被最小高度托底且内容再增长时根元素尺寸不变，只有内层会变
   resizeObs = new ResizeObserver(syncHeight);
   if (rootEl.value) resizeObs.observe(rootEl.value);
+  if (listInnerEl.value) resizeObs.observe(listInnerEl.value);
   syncHeight();
 });
 
@@ -362,6 +359,7 @@ onBeforeUnmount(() => {
       :class="{ 'fade-top': !atTop, 'fade-bottom': !atBottom }"
       @scroll="updateEdges"
     >
+      <div ref="listInnerEl" class="qp-list-inner">
       <template v-if="mode === 'prompts'">
         <div
           v-for="(p, i) in prompts"
@@ -433,6 +431,7 @@ onBeforeUnmount(() => {
           在任意程序里复制的文本和截图都会出现在这里
         </EmptyState>
       </template>
+      </div>
     </div>
 
     <div class="qp-foot">
@@ -490,8 +489,7 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  height: auto;
-  max-height: 100vh;
+  height: 100vh;
   background: var(--panel);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-lg);
@@ -620,6 +618,7 @@ onBeforeUnmount(() => {
   padding: 2px 8px 8px;
   min-height: 0;
   max-height: 420px;
+  flex: 1 1 auto;
 }
 
 .qp-list.fade-top {
