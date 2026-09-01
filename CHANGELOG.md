@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-02
+
+### 修复
+- 变量填写窗取消后，↑↓ / Enter / Esc 键盘导航全部失效的问题（窗口关闭时焦点丢失）
+- 快捷面板高度自适应失效：重开面板后高度卡在两行、无法恢复
+- 搜索结果较少时，面板底部出现空白条
+- 面板高度计算补算列表内边距，中等数量结果不再出现多余滚动条
+
+### 调整
+- 面板最小高度统一为 300px，短列表垂直居中，与空态观感一致
+- 本地开发端口从 1420 改为 1450，避开 Windows 动态保留端口段
+
 ## [0.1.2] - 2026-09-01
 
 ### 修复
@@ -35,7 +47,8 @@
 - 剪贴板历史（文本 + 图片），粘贴后可选自动恢复原剪贴板
 - WebDAV / GitHub Gist 云同步，JSON / Markdown / TXT 导入导出，系统托盘常驻
 
-[Unreleased]: https://github.com/baoxinwen/PromptMate/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/baoxinwen/PromptMate/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/baoxinwen/PromptMate/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/baoxinwen/PromptMate/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/baoxinwen/PromptMate/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/baoxinwen/PromptMate/releases/tag/v0.1.0
