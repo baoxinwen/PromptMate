@@ -619,6 +619,14 @@ onBeforeUnmount(() => {
   min-height: 0;
   max-height: 420px;
   flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 内容不足时在列表区垂直居中（与空态观感一致）；内容溢出时 margin
+   自动归零，不影响滚动与顶部可达性 */
+.qp-list-inner {
+  margin: auto 0;
 }
 
 .qp-list.fade-top {

@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { computePanelHeight, PANEL_LIST_MAX } from './panelHeight';
+import { computePanelHeight, PANEL_LIST_MAX, PANEL_MIN } from './panelHeight';
 
-// 回归背景：syncHeight 曾用根元素 offsetHeight 测量期望高度，
+// 回归背景 1：syncHeight 曾用根元素 offsetHeight 测量期望高度，
 // 而根元素被 max-height:100vh（=当前窗口高度）封顶——窗口一旦变小，
 // 测量值永远无法超过它，高度只能缩不能涨（快捷面板重开后只剩两行）。
+// 回归背景 2：最小高度曾只在 Rust 侧 clamp(300)，前端 0 结果/单条结果
+// 的内容高（约 235）与托底值不一致，短列表下方留一大块空白、观感割裂；
+// 统一为前端与 Rust 共用 PANEL_MIN=300，短列表配合垂直居中显示。
 describe('computePanelHeight：面板期望高度按内容计算，与当前窗口高度解耦', () => {
   const head = 58;
   const chips = 40;
@@ -17,9 +20,17 @@ describe('computePanelHeight：面板期望高度按内容计算，与当前窗�
     expect(h).toBe(head + chips + PANEL_LIST_MAX + foot + 2);
   });
 
-  it('列表内容少于上限时按内容收缩', () => {
-    const h = computePanelHeight({ head, chips, listContent: 100, foot });
-    expect(h).toBe(head + chips + 100 + foot + 2);
+  it('统一最小高度：0 结果 / 单条结果等不足 PANEL_MIN 的内容托底到 PANEL_MIN', () => {
+    // 单条结果内容高约 90 → 自然高 226 → 托底 300（与 Rust clamp 一致）
+    const one = computePanelHeight({ head, chips, listContent: 90, foot });
+    expect(one).toBe(PANEL_MIN);
+    const empty = computePanelHeight({ head, chips, listContent: 0, foot });
+    expect(empty).toBe(PANEL_MIN);
+  });
+
+  it('超过 PANEL_MIN 且未到上限时按内容收缩', () => {
+    const h = computePanelHeight({ head, chips, listContent: 200, foot });
+    expect(h).toBe(head + chips + 200 + foot + 2);
   });
 
   it('内容恰好等于上限时取上限', () => {
@@ -27,13 +38,8 @@ describe('computePanelHeight：面板期望高度按内容计算，与当前窗�
     expect(h).toBe(head + chips + PANEL_LIST_MAX + foot + 2);
   });
 
-  it('边界：空列表（scrollHeight 为 0）时高度为固定区块之和', () => {
-    const h = computePanelHeight({ head, chips, listContent: 0, foot });
-    expect(h).toBe(head + chips + 0 + foot + 2);
-  });
-
-  it('listMax 可覆盖（供紧凑模式等场景复用）', () => {
-    const h = computePanelHeight({ head, chips, listContent: 500, foot, listMax: 200 });
-    expect(h).toBe(head + chips + 200 + foot + 2);
+  it('listMax 可覆盖（供紧凑模式等场景复用），覆盖后仍不低于 PANEL_MIN', () => {
+    const h = computePanelHeight({ head, chips, listContent: 500, foot, listMax: 100 });
+    expect(h).toBe(PANEL_MIN);
   });
 });
